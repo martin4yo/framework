@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init:*)",
+      "Bash(npm install)",
+      "Bash(npm run install:all:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout /t 10 /nobreak)",
+      "Bash(npm install:*)",
+      "Bash(ping:*)",
+      "Bash(nul)",
+      "Bash(timeout /t 10)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(taskkill /F /PID 27768)",
+      "Bash(cat:*)",
+      "Bash(tasklist:*)",
+      "Bash(npm run seed:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npm run start:dev:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(move INICIO.md DOCS )",
+      "Bash(move SETUP.md DOCS )",
+      "Bash(move PROXIMA_SESION.md DOCS )",
+      "Bash(move:*)",
+      "Bash(move SETUP_GOOGLE_OAUTH.md DOCS)",
+      "Bash(mv:*)",
+      "Bash(powershell -Command \"Get-Item ''D:\\Desarrollos\\React\\framework\\frontend\\src\\assets\\axioma_logo_invertido.png'' | Select-Object Name, Length\")",
+      "Bash(powershell -Command \"Get-Item ''D:\\Desarrollos\\React\\framework\\frontend\\src\\assets\\axioma_logo_300x500.png'' | Select-Object Name, Length\")",
+      "Bash(powershell \"Get-Item ''D:\\Desarrollos\\React\\framework\\frontend\\public\\axioma_logo_invertido.png'' | Select Length\")",
+      "Bash(copy:*)",
+      "Bash(powershell:*)",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

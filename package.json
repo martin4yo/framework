@@ -1,0 +1,33 @@
+{
+  "name": "axioma-core",
+  "version": "1.0.0",
+  "description": "Multi-tenant authentication and authorization system - Monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run start:dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "build:all": "cd backend && npm run build && cd ../frontend && npm run build",
+    "start:backend": "cd backend && npm run start:prod",
+    "start:frontend": "cd frontend && npm run start",
+    "lint:backend": "cd backend && npm run lint",
+    "lint:frontend": "cd frontend && npm run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "authentication",
+    "authorization",
+    "multi-tenant",
+    "nestjs",
+    "nextjs",
+    "postgresql",
+    "jwt",
+    "rbac",
+    "casl"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

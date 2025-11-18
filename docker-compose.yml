@@ -1,0 +1,62 @@
+# Docker Compose configuration for Axioma Core
+# Note: This file is optional. You can run PostgreSQL and Redis natively on your machine.
+#
+# If you prefer native installation:
+# - PostgreSQL: Download from https://www.postgresql.org/download/
+# - Redis: Download from https://redis.io/download/ (or use Memurai on Windows)
+#
+# To use this Docker setup:
+# 1. Install Docker Desktop
+# 2. Run: docker-compose up -d
+# 3. Database will be available at localhost:5432
+# 4. Redis will be available at localhost:6379
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: axioma-core-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: core_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d core_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: axioma-core-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: axioma-core-network
