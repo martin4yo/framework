@@ -7,12 +7,9 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import { RefreshToken } from './entities/refresh-token.entity';
-import { User } from '../users/entities/user.entity';
+import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { EmailService } from '../email/email.service';
@@ -57,8 +54,7 @@ export interface AuthResponse {
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(RefreshToken)
-    private refreshTokenRepository: Repository<RefreshToken>,
+    private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private usersService: UsersService,
@@ -89,11 +85,12 @@ export class AuthService {
       lastName: registerDto.lastName,
     });
 
-    // Set verification token
-    user.emailVerificationToken = verificationToken;
-    user.emailVerificationExpires = verificationExpires;
-    user.emailVerified = false;
-    await this.usersService.update(user.id, user);
+    // Set verification token and update user
+    await this.usersService.update(user.id, {
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: verificationExpires,
+      emailVerified: false,
+    });
 
     // Send verification email
     try {
@@ -114,13 +111,37 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto, ipAddress?: string, userAgent?: string): Promise<AuthResponse> {
+  async login(loginDto: LoginDto & { tenantId?: string }, ipAddress?: string, userAgent?: string): Promise<AuthResponse> {
     let tenant;
     let user;
 
     console.log('🔐 [Login] Attempting login for:', loginDto.email);
 
-    if (loginDto.tenantSlug) {
+    if (loginDto.tenantId) {
+      // Login with specific tenant ID (for multi-tenant users)
+      console.log('🏢 [Login] Looking for tenant by ID:', loginDto.tenantId);
+      tenant = await this.tenantsService.findOne(loginDto.tenantId);
+      if (!tenant) {
+        console.log('❌ [Login] Tenant not found');
+        throw new UnauthorizedException('Credenciales inválidas');
+      }
+
+      if (!tenant.isActive) {
+        console.log('❌ [Login] Tenant is not active');
+        throw new UnauthorizedException('El tenant no está activo');
+      }
+
+      // Find user and check if they belong to this tenant
+      const userTenants = await this.usersService.getUserTenantsByEmail(loginDto.email);
+      const userTenant = userTenants.find(ut => ut.tenantId === loginDto.tenantId && ut.isActive);
+
+      if (!userTenant) {
+        console.log('❌ [Login] User not found in this tenant');
+        throw new UnauthorizedException('Credenciales inválidas');
+      }
+
+      user = await this.usersService.findOne(userTenant.userId);
+    } else if (loginDto.tenantSlug) {
       // Multi-tenant login: find tenant by slug
       console.log('🏢 [Login] Looking for tenant:', loginDto.tenantSlug);
       tenant = await this.tenantsService.findBySlug(loginDto.tenantSlug);
@@ -140,9 +161,26 @@ export class AuthService {
       // Single-tenant or auto-detect: find user across all tenants
       console.log('🔍 [Login] Looking for user across all tenants');
       user = await this.usersService.findByEmailAcrossTenants(loginDto.email);
+
       if (user) {
-        tenant = user.tenant;
-        console.log('✅ [Login] User found, tenant:', tenant?.name);
+        // Check if user has tenant assignments
+        const userTenants = await this.usersService.getUserTenantsByEmail(loginDto.email);
+
+        if (userTenants.length > 0) {
+          // User has tenant assignments - use primary tenant
+          const primaryTenant = userTenants.find(ut => ut.isPrimary);
+          const selectedTenant = primaryTenant || userTenants[0];
+
+          tenant = await this.tenantsService.findOne(selectedTenant.tenantId);
+          // Load user with tenant data
+          user = await this.usersService.findOne(user.id);
+          console.log('✅ [Login] User found with tenant assignments, using:', tenant?.name);
+        } else {
+          // User has no tenant assignments - load full user data
+          user = await this.usersService.findOne(user.id);
+          tenant = (user as any).tenant;
+          console.log('✅ [Login] User found with legacy tenant:', tenant?.name);
+        }
       } else {
         console.log('❌ [Login] User not found');
       }
@@ -171,8 +209,7 @@ export class AuthService {
     }
 
     // Update last login
-    user.lastLoginAt = new Date();
-    await this.usersService.update(user.id, { ...user });
+    await this.usersService.update(user.id, { lastLoginAt: new Date() });
 
     // Generate tokens
     return this.generateAuthResponse(user, ipAddress, userAgent);
@@ -180,43 +217,60 @@ export class AuthService {
 
   async refreshAccessToken(refreshTokenString: string, ipAddress?: string, userAgent?: string): Promise<AuthResponse> {
     // Find refresh token
-    const refreshToken = await this.refreshTokenRepository.findOne({
+    const refreshToken = await this.prisma.refreshToken.findFirst({
       where: { token: refreshTokenString },
-      relations: ['user', 'user.tenant', 'user.roles', 'user.roles.permissions'],
     });
 
-    if (!refreshToken || !refreshToken.isActive) {
+    if (!refreshToken) {
       throw new UnauthorizedException('Token de actualización inválido');
     }
 
-    // Revoke old token and generate new one
-    refreshToken.revoked = true;
-    refreshToken.revokedAt = new Date();
-    await this.refreshTokenRepository.save(refreshToken);
+    // Check if token is active (not revoked and not expired)
+    const isActive = !refreshToken.revoked && new Date(refreshToken.expiresAt) > new Date();
+
+    if (!isActive) {
+      throw new UnauthorizedException('Token de actualización inválido');
+    }
+
+    // Revoke old token
+    await this.prisma.refreshToken.update({
+      where: { id: refreshToken.id },
+      data: {
+        revoked: true,
+        revokedAt: new Date(),
+      },
+    });
+
+    // Load user with all relations
+    const user = await this.usersService.findOne(refreshToken.userId);
 
     // Generate new tokens
-    return this.generateAuthResponse(refreshToken.user, ipAddress, userAgent);
+    return this.generateAuthResponse(user as any, ipAddress, userAgent);
   }
 
   async logout(refreshTokenString: string): Promise<void> {
-    const refreshToken = await this.refreshTokenRepository.findOne({
+    const refreshToken = await this.prisma.refreshToken.findFirst({
       where: { token: refreshTokenString },
     });
 
     if (refreshToken && !refreshToken.revoked) {
-      refreshToken.revoked = true;
-      refreshToken.revokedAt = new Date();
-      await this.refreshTokenRepository.save(refreshToken);
+      await this.prisma.refreshToken.update({
+        where: { id: refreshToken.id },
+        data: {
+          revoked: true,
+          revokedAt: new Date(),
+        },
+      });
     }
   }
 
-  async validateUser(email: string, password: string, tenantId: string): Promise<User | null> {
+  async validateUser(email: string, password: string, tenantId: string): Promise<any | null> {
     const user = await this.usersService.findByEmail(email, tenantId);
     if (!user) {
       return null;
     }
 
-    const isPasswordValid = await this.usersService.validatePassword(user, password);
+    const isPasswordValid = await this.usersService.validatePassword(user as any, password);
     if (!isPasswordValid) {
       return null;
     }
@@ -225,12 +279,15 @@ export class AuthService {
   }
 
   private async generateAuthResponse(
-    user: User,
+    user: any,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponse> {
-    // Extract permissions from roles
+    // Extract permissions from roles (Prisma structure: userRoles -> role -> rolePermissions -> permission)
     const permissions = this.extractPermissionsFromRoles(user);
+
+    // Extract role names from Prisma structure
+    const roles = user.userRoles?.map((ur: any) => ur.role?.name).filter(Boolean) || [];
 
     // Create JWT payload
     const payload: JwtPayload = {
@@ -238,7 +295,7 @@ export class AuthService {
       email: user.email,
       tenantId: user.tenantId,
       tenantSlug: user.tenant?.slug || '',
-      roles: user.roles?.map((r) => r.name) || [],
+      roles,
       permissions,
     };
 
@@ -276,20 +333,22 @@ export class AuthService {
     userId: string,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<RefreshToken> {
+  ): Promise<any> {
     const token = uuidv4();
     const expiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d');
     const expiresAt = this.calculateExpirationDate(expiresIn);
 
-    const refreshToken = this.refreshTokenRepository.create({
-      userId,
-      token,
-      expiresAt,
-      ipAddress,
-      userAgent,
+    const refreshToken = await this.prisma.refreshToken.create({
+      data: {
+        userId,
+        token,
+        expiresAt,
+        ipAddress,
+        userAgent,
+      },
     });
 
-    return this.refreshTokenRepository.save(refreshToken);
+    return refreshToken;
   }
 
   private calculateExpirationDate(expiresIn: string): Date {
@@ -317,15 +376,22 @@ export class AuthService {
     }
   }
 
-  private extractPermissionsFromRoles(user: User): Array<{ resource: string; actions: string[] }> {
-    if (!user.roles || user.roles.length === 0) {
+  private extractPermissionsFromRoles(user: any): Array<{ resource: string; actions: string[] }> {
+    // Prisma structure: userRoles -> role -> rolePermissions -> permission
+    if (!user.userRoles || user.userRoles.length === 0) {
       return [];
     }
 
     const permissionsMap = new Map<string, Set<string>>();
 
-    user.roles.forEach((role) => {
-      role.permissions?.forEach((permission) => {
+    user.userRoles.forEach((userRole: any) => {
+      const role = userRole.role;
+      if (!role || !role.rolePermissions) return;
+
+      role.rolePermissions.forEach((rolePermission: any) => {
+        const permission = rolePermission.permission;
+        if (!permission) return;
+
         if (!permissionsMap.has(permission.resource)) {
           permissionsMap.set(permission.resource, new Set());
         }
@@ -365,8 +431,7 @@ export class AuthService {
     }
 
     // Update last login
-    user.lastLoginAt = new Date();
-    await this.usersService.update(user.id, { ...user });
+    await this.usersService.update(user.id, { lastLoginAt: new Date() });
 
     // Load user with relations for token generation
     const userWithRelations = await this.usersService.findOne(user.id);
@@ -392,10 +457,10 @@ export class AuthService {
           apellido: user.lastName,
           superuser: false, // Adjust based on your user model
         },
-        tenant: user.tenant ? {
-          id: user.tenant.id,
-          nombre: user.tenant.name,
-          slug: user.tenant.slug,
+        tenant: (user as any).tenant ? {
+          id: (user as any).tenant.id,
+          nombre: (user as any).tenant.name,
+          slug: (user as any).tenant.slug,
           plan: 'basic', // Adjust based on your tenant model
         } : null,
       };
@@ -427,10 +492,11 @@ export class AuthService {
     }
 
     // Mark email as verified
-    user.emailVerified = true;
-    user.emailVerificationToken = undefined;
-    user.emailVerificationExpires = undefined;
-    await this.usersService.update(user.id, user);
+    await this.usersService.update(user.id, {
+      emailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationExpires: null,
+    });
 
     console.log('✅ [VerifyEmail] Email verified successfully for:', user.email);
 
@@ -457,9 +523,10 @@ export class AuthService {
     resetExpires.setHours(resetExpires.getHours() + 1); // Token expires in 1 hour
 
     // Save token to user
-    user.passwordResetToken = resetToken;
-    user.passwordResetExpires = resetExpires;
-    await this.usersService.update(user.id, user);
+    await this.usersService.update(user.id, {
+      passwordResetToken: resetToken,
+      passwordResetExpires: resetExpires,
+    });
 
     // Send reset email
     try {
@@ -498,12 +565,192 @@ export class AuthService {
     await this.usersService.updatePassword(user.id, newPassword);
 
     // Clear reset token
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
-    await this.usersService.update(user.id, user);
+    await this.usersService.update(user.id, {
+      passwordResetToken: null,
+      passwordResetExpires: null,
+    });
 
     console.log('✅ [ResetPassword] Password reset successfully for:', user.email);
 
     return { message: 'Contraseña actualizada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña.' };
+  }
+
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    console.log('📧 [ResendVerification] Request for:', email);
+
+    // Find user by email
+    const user = await this.usersService.findByEmailAcrossTenants(email);
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    if (user.emailVerified) {
+      throw new BadRequestException('El email ya ha sido verificado');
+    }
+
+    // Generate new verification token
+    const verificationToken = uuidv4();
+    const verificationExpires = new Date();
+    verificationExpires.setHours(verificationExpires.getHours() + 24);
+
+    // Update user with new token
+    await this.usersService.update(user.id, {
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: verificationExpires,
+    });
+
+    // Send verification email
+    try {
+      await this.emailService.sendVerificationEmail(
+        user.email,
+        verificationToken,
+        `${user.firstName} ${user.lastName}`,
+      );
+      console.log('✅ [ResendVerification] Email sent to:', user.email);
+    } catch (error) {
+      console.error('❌ [ResendVerification] Error sending email:', error);
+      throw new BadRequestException('Error al enviar email de verificación');
+    }
+
+    return { message: 'Email de verificación enviado correctamente' };
+  }
+
+  async getUserTenantsByEmail(email: string): Promise<any[]> {
+    console.log('🏢 [GetUserTenants] Request for:', email);
+
+    // Get user tenants by email
+    const userTenants = await this.usersService.getUserTenantsByEmail(email);
+
+    if (!userTenants || userTenants.length === 0) {
+      return [];
+    }
+
+    // Return tenants with isPrimary flag
+    return userTenants.map((ut: any) => ({
+      id: ut.tenant.id,
+      name: ut.tenant.name,
+      slug: ut.tenant.slug,
+      isPrimary: ut.isPrimary,
+      isActive: ut.isActive,
+    }));
+  }
+
+  async getUserSessions(userId: string): Promise<any[]> {
+    console.log('📱 [GetUserSessions] Request for user:', userId);
+
+    // Get all active sessions for the user
+    const sessions = await this.prisma.refreshToken.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return sessions;
+  }
+
+  async revokeSession(sessionId: string, userId: string): Promise<void> {
+    console.log('🚫 [RevokeSession] Revoking session:', sessionId, 'for user:', userId);
+
+    // Find the session
+    const session = await this.prisma.refreshToken.findFirst({
+      where: { id: sessionId, userId },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Sesión no encontrada');
+    }
+
+    if (session.revoked) {
+      throw new BadRequestException('La sesión ya está revocada');
+    }
+
+    // Revoke the session
+    await this.prisma.refreshToken.update({
+      where: { id: session.id },
+      data: {
+        revoked: true,
+        revokedAt: new Date(),
+      },
+    });
+
+    console.log('✅ [RevokeSession] Session revoked successfully');
+  }
+
+  async revokeAllUserSessions(userId: string, exceptSessionId?: string): Promise<number> {
+    console.log('🚫 [RevokeAllUserSessions] Revoking all sessions for user:', userId);
+
+    // Find all active sessions for the user
+    const sessions = await this.prisma.refreshToken.findMany({
+      where: { userId, revoked: false },
+    });
+
+    let revokedCount = 0;
+
+    for (const session of sessions) {
+      // Skip the current session if specified
+      if (exceptSessionId && session.id === exceptSessionId) {
+        continue;
+      }
+
+      await this.prisma.refreshToken.update({
+        where: { id: session.id },
+        data: {
+          revoked: true,
+          revokedAt: new Date(),
+        },
+      });
+      revokedCount++;
+    }
+
+    console.log(`✅ [RevokeAllUserSessions] Revoked ${revokedCount} sessions`);
+    return revokedCount;
+  }
+
+  async deleteSession(sessionId: string, userId: string): Promise<void> {
+    console.log('🗑️ [DeleteSession] Deleting session:', sessionId, 'for user:', userId);
+
+    // Find the session
+    const session = await this.prisma.refreshToken.findFirst({
+      where: { id: sessionId, userId },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Sesión no encontrada');
+    }
+
+    // Delete the session
+    await this.prisma.refreshToken.delete({
+      where: { id: session.id },
+    });
+
+    console.log('✅ [DeleteSession] Session deleted successfully');
+  }
+
+  async deleteAllUserSessions(userId: string, onlyInactive?: boolean): Promise<number> {
+    console.log('🗑️ [DeleteAllUserSessions] Deleting sessions for user:', userId);
+
+    let sessions;
+    if (onlyInactive) {
+      // Delete only revoked or expired sessions
+      sessions = await this.prisma.refreshToken.findMany({
+        where: { userId },
+      });
+      sessions = sessions.filter(s => s.revoked || new Date(s.expiresAt) < new Date());
+    } else {
+      // Delete all sessions
+      sessions = await this.prisma.refreshToken.findMany({
+        where: { userId },
+      });
+    }
+
+    // Delete sessions one by one
+    for (const session of sessions) {
+      await this.prisma.refreshToken.delete({
+        where: { id: session.id },
+      });
+    }
+
+    console.log(`✅ [DeleteAllUserSessions] Deleted ${sessions.length} sessions`);
+    return sessions.length;
   }
 }

@@ -9,6 +9,7 @@ import {
   Req,
   Ip,
   Res,
+  Param,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
@@ -139,5 +140,61 @@ export class AuthController {
   @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 intentos de reset por minuto
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto.token, resetPasswordDto.password);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 solicitudes por minuto
+  async resendVerificationEmail(@Body() body: { email: string }) {
+    return this.authService.resendVerificationEmail(body.email);
+  }
+
+  @Public()
+  @Post('user-tenants')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 solicitudes por minuto
+  async getUserTenantsByEmail(@Body() body: { email: string }) {
+    return this.authService.getUserTenantsByEmail(body.email);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  @HttpCode(HttpStatus.OK)
+  async getUserSessions(@CurrentUser() user: any) {
+    return this.authService.getUserSessions(user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/:sessionId/revoke')
+  @HttpCode(HttpStatus.OK)
+  async revokeSession(@Param('sessionId') sessionId: string, @CurrentUser() user: any) {
+    await this.authService.revokeSession(sessionId, user.userId);
+    return { message: 'Sesión revocada exitosamente' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/revoke-all')
+  @HttpCode(HttpStatus.OK)
+  async revokeAllSessions(@CurrentUser() user: any, @Body() body: { exceptCurrent?: boolean }) {
+    // Get current session ID from refresh token if needed
+    const exceptSessionId = body.exceptCurrent ? undefined : undefined; // TODO: Get from request
+    const count = await this.authService.revokeAllUserSessions(user.userId, exceptSessionId);
+    return { message: `${count} sesiones revocadas exitosamente` };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/:sessionId/delete')
+  @HttpCode(HttpStatus.OK)
+  async deleteSession(@Param('sessionId') sessionId: string, @CurrentUser() user: any) {
+    await this.authService.deleteSession(sessionId, user.userId);
+    return { message: 'Sesión eliminada exitosamente' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/delete-all')
+  @HttpCode(HttpStatus.OK)
+  async deleteAllSessions(@CurrentUser() user: any, @Body() body: { onlyInactive?: boolean }) {
+    const count = await this.authService.deleteAllUserSessions(user.userId, body.onlyInactive);
+    return { message: `${count} sesiones eliminadas exitosamente` };
   }
 }

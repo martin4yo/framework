@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Users, Shield, Database, Activity, Home, Settings, UserPlus, Lock } from 'lucide-react';
@@ -218,7 +219,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <a
+              <Link
                 href="/users"
                 className="flex items-center p-4 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors"
               >
@@ -229,9 +230,9 @@ export default function DashboardPage() {
                     Ver y administrar usuarios del sistema
                   </span>
                 </div>
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/roles"
                 className="flex items-center p-4 bg-purple-100 rounded-lg hover:bg-purple-200 transition-colors"
               >
@@ -242,9 +243,9 @@ export default function DashboardPage() {
                     Configurar roles y asignar permisos
                   </span>
                 </div>
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/tenants"
                 className="flex items-center p-4 bg-amber-100 rounded-lg hover:bg-amber-200 transition-colors"
               >
@@ -255,9 +256,9 @@ export default function DashboardPage() {
                     Administrar organizaciones
                   </span>
                 </div>
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/settings"
                 className="flex items-center p-4 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
@@ -268,7 +269,7 @@ export default function DashboardPage() {
                     Ajustes generales del sistema
                   </span>
                 </div>
-              </a>
+              </Link>
             </div>
           </CardContent>
         </Card>

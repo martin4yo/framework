@@ -9,7 +9,7 @@ import { UserModal } from '@/components/modals/UserModal';
 import { ResetPasswordModal } from '@/components/modals/ResetPasswordModal';
 import { AssignTenantModal } from '@/components/modals/AssignTenantModal';
 import ConfirmModal from '@/components/modals/ConfirmModal';
-import { Users, UserPlus, Search, Edit, Trash2, Mail, Shield, Key, Building2 } from 'lucide-react';
+import { Users, UserPlus, Search, Edit, Trash2, Mail, Shield, Key, Building2, MailCheck } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,7 @@ interface User {
   firstName: string;
   lastName: string;
   isActive: boolean;
+  emailVerified: boolean;
   tenantId: string;
   roles?: Array<{ id: string; name: string }>;
   createdAt: string;
@@ -123,6 +124,26 @@ export default function UsersPage() {
     } catch (error: any) {
       console.error('Error updating user status:', error);
       toast.error('Error al actualizar estado del usuario');
+    }
+  };
+
+  const handleResendVerificationEmail = async (user: User) => {
+    try {
+      await axios.post(
+        `${API_URL}/auth/resend-verification`,
+        { email: user.email },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      toast.success('Email de verificación enviado correctamente');
+    } catch (error: any) {
+      console.error('Error resending verification email:', error);
+      toast.error(
+        error.response?.data?.message || 'Error al enviar email de verificación'
+      );
     }
   };
 
@@ -262,9 +283,9 @@ export default function UsersPage() {
             Lista de Usuarios ({filteredUsers.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
-            <div className="flex justify-center items-center py-12">
+            <div className="flex justify-center items-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-palette-dark"></div>
             </div>
           ) : filteredUsers.length === 0 ? (
@@ -277,11 +298,10 @@ export default function UsersPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <table className="w-full">
                 <thead className="bg-gray-50 border-b border-border">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
+                    <th className="pl-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
                       Usuario
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
@@ -296,7 +316,7 @@ export default function UsersPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
                       Fecha de Registro
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-text-secondary uppercase tracking-wider">
+                    <th className="pr-6 py-3 text-right text-xs font-medium text-text-secondary uppercase tracking-wider">
                       Acciones
                     </th>
                   </tr>
@@ -304,7 +324,7 @@ export default function UsersPage() {
                 <tbody className="bg-white divide-y divide-border">
                   {filteredUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="pl-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="w-10 h-10 bg-palette-yellow rounded-full flex items-center justify-center">
                             <span className="text-sm font-medium text-palette-dark">
@@ -361,7 +381,7 @@ export default function UsersPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
                         {new Date(user.createdAt).toLocaleDateString('es-AR')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="pr-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-2">
                           <button
                             onClick={() => {
@@ -373,6 +393,15 @@ export default function UsersPage() {
                           >
                             <Building2 className="w-4 h-4" />
                           </button>
+                          {!user.emailVerified && (
+                            <button
+                              onClick={() => handleResendVerificationEmail(user)}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Reenviar email de verificación"
+                            >
+                              <MailCheck className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleOpenModal(user)}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -400,7 +429,6 @@ export default function UsersPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
           )}
         </CardContent>
       </Card>

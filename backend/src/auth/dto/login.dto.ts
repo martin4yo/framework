@@ -5,6 +5,10 @@ export class LoginDto {
   @IsString()
   tenantSlug?: string;
 
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
+
   @IsEmail()
   @IsNotEmpty()
   email: string;

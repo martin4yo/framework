@@ -33,7 +33,12 @@
       "Bash(copy:*)",
       "Bash(powershell:*)",
       "Bash(npm run build:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(cd:*)",
+      "Bash(npx prisma init:*)",
+      "Bash(npx prisma db pull:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [],
     "ask": []

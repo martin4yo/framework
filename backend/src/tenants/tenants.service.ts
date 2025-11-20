@@ -1,19 +1,16 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Tenant } from './entities/tenant.entity';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 
 @Injectable()
 export class TenantsService {
   constructor(
-    @InjectRepository(Tenant)
-    private tenantsRepository: Repository<Tenant>,
+    private prisma: PrismaService,
   ) {}
 
-  async create(createTenantDto: CreateTenantDto): Promise<Tenant> {
-    const existingTenant = await this.tenantsRepository.findOne({
+  async create(createTenantDto: CreateTenantDto): Promise<any> {
+    const existingTenant = await this.prisma.tenant.findFirst({
       where: { slug: createTenantDto.slug },
     });
 
@@ -21,29 +18,30 @@ export class TenantsService {
       throw new ConflictException(`Ya existe un tenant con el slug "${createTenantDto.slug}"`);
     }
 
-    const tenant = this.tenantsRepository.create(createTenantDto);
-    return this.tenantsRepository.save(tenant);
-  }
-
-  async findAll(): Promise<Tenant[]> {
-    return this.tenantsRepository.find({
-      order: { createdAt: 'DESC' },
+    return this.prisma.tenant.create({
+      data: createTenantDto,
     });
   }
 
-  async findOne(id: string): Promise<Tenant> {
-    const tenant = await this.tenantsRepository.findOne({ where: { id } });
+  async findAll(): Promise<any[]> {
+    return this.prisma.tenant.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOne(id: string): Promise<any> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
     if (!tenant) {
       throw new NotFoundException(`Tenant con ID "${id}" no encontrado`);
     }
     return tenant;
   }
 
-  async findBySlug(slug: string): Promise<Tenant | null> {
-    return this.tenantsRepository.findOne({ where: { slug } });
+  async findBySlug(slug: string): Promise<any | null> {
+    return this.prisma.tenant.findFirst({ where: { slug } });
   }
 
-  async update(id: string, updateTenantDto: UpdateTenantDto): Promise<Tenant> {
+  async update(id: string, updateTenantDto: UpdateTenantDto): Promise<any> {
     const tenant = await this.findOne(id);
 
     if (updateTenantDto.slug && updateTenantDto.slug !== tenant.slug) {
@@ -53,21 +51,26 @@ export class TenantsService {
       }
     }
 
-    Object.assign(tenant, updateTenantDto);
-    return this.tenantsRepository.save(tenant);
+    return this.prisma.tenant.update({
+      where: { id },
+      data: updateTenantDto,
+    });
   }
 
   async remove(id: string): Promise<void> {
     const tenant = await this.findOne(id);
-    await this.tenantsRepository.softRemove(tenant);
+    await this.prisma.tenant.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 
-  async findDefaultTenant(): Promise<Tenant | null> {
+  async findDefaultTenant(): Promise<any | null> {
     // Find the first active tenant or create logic for default tenant
     // You can customize this logic based on your needs
-    const tenant = await this.tenantsRepository.findOne({
+    const tenant = await this.prisma.tenant.findFirst({
       where: { isActive: true },
-      order: { createdAt: 'ASC' },
+      orderBy: { createdAt: 'asc' },
     });
     return tenant;
   }

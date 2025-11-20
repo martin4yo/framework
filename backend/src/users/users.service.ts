@@ -2,33 +2,27 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { User } from './entities/user.entity';
-import { UserTenant } from './entities/user-tenant.entity';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AssignTenantDto } from './dto/assign-tenant.dto';
 import { UnassignTenantDto } from './dto/unassign-tenant.dto';
+import { User, UserTenant } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(User)
-    private usersRepository: Repository<User>,
-    @InjectRepository(UserTenant)
-    private userTenantRepository: Repository<UserTenant>,
+    private prisma: PrismaService,
     private configService: ConfigService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existingUser = await this.usersRepository.findOne({
+    const existingUser = await this.prisma.user.findFirst({
       where: {
-        tenantId: createUserDto.tenantId ?? undefined,
+        tenantId: createUserDto.tenantId ?? null,
         email: createUserDto.email,
       },
     });
@@ -45,27 +39,50 @@ export class UsersService {
       passwordHash = await bcrypt.hash(createUserDto.password, bcryptRounds);
     }
 
-    const user = this.usersRepository.create({
-      ...createUserDto,
-      passwordHash,
-    });
+    const { password, ...userData } = createUserDto;
 
-    return this.usersRepository.save(user);
+    return this.prisma.user.create({
+      data: {
+        ...userData,
+        passwordHash,
+      },
+    });
   }
 
   async findAll(tenantId?: string): Promise<User[]> {
-    const where = tenantId ? { tenantId } : {};
-    return this.usersRepository.find({
-      where,
-      relations: ['tenant', 'roles'],
-      order: { createdAt: 'DESC' },
+    return this.prisma.user.findMany({
+      where: tenantId ? { tenantId } : {},
+      include: {
+        tenant: true,
+        userRoles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(id: string): Promise<User> {
-    const user = await this.usersRepository.findOne({
+    const user = await this.prisma.user.findUnique({
       where: { id },
-      relations: ['tenant', 'roles', 'roles.permissions'],
+      include: {
+        tenant: true,
+        userRoles: {
+          include: {
+            role: {
+              include: {
+                rolePermissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -76,41 +93,61 @@ export class UsersService {
   }
 
   async findByEmail(email: string, tenantId: string): Promise<User | null> {
-    return this.usersRepository.findOne({
+    return this.prisma.user.findFirst({
       where: { email, tenantId },
-      relations: ['roles', 'roles.permissions'],
+      include: {
+        userRoles: {
+          include: {
+            role: {
+              include: {
+                rolePermissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    const user = await this.findOne(id);
+    await this.findOne(id);
+
+    const updateData: any = { ...updateUserDto };
+    delete updateData.password;
 
     // If password is provided, hash it
     if (updateUserDto.password && updateUserDto.password.trim() !== '') {
       const bcryptRounds = parseInt(this.configService.get<string>('BCRYPT_ROUNDS', '10'), 10);
-      user.passwordHash = await bcrypt.hash(updateUserDto.password, bcryptRounds);
-      // Remove password from DTO to avoid assigning it directly
-      const { password, ...updateData } = updateUserDto;
-      Object.assign(user, updateData);
-    } else {
-      // Remove password from DTO if it's empty
-      const { password, ...updateData } = updateUserDto;
-      Object.assign(user, updateData);
+      updateData.passwordHash = await bcrypt.hash(updateUserDto.password, bcryptRounds);
     }
 
-    return this.usersRepository.save(user);
+    return this.prisma.user.update({
+      where: { id },
+      data: updateData,
+    });
   }
 
   async remove(id: string): Promise<void> {
-    const user = await this.findOne(id);
-    await this.usersRepository.softRemove(user);
+    await this.findOne(id);
+    await this.prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 
   async updatePassword(id: string, newPassword: string): Promise<void> {
-    const user = await this.findOne(id);
+    await this.findOne(id);
     const bcryptRounds = parseInt(this.configService.get<string>('BCRYPT_ROUNDS', '10'), 10);
-    user.passwordHash = await bcrypt.hash(newPassword, bcryptRounds);
-    await this.usersRepository.save(user);
+    const passwordHash = await bcrypt.hash(newPassword, bcryptRounds);
+
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
   }
 
   async validatePassword(user: User, password: string): Promise<boolean> {
@@ -121,23 +158,68 @@ export class UsersService {
   }
 
   async findByEmailAcrossTenants(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({
+    return this.prisma.user.findFirst({
       where: { email },
-      relations: ['tenant', 'roles', 'roles.permissions'],
+      include: {
+        tenant: true,
+        userRoles: {
+          include: {
+            role: {
+              include: {
+                rolePermissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
   }
 
   async findByVerificationToken(token: string): Promise<User | null> {
-    return this.usersRepository.findOne({
+    return this.prisma.user.findFirst({
       where: { emailVerificationToken: token },
-      relations: ['tenant', 'roles', 'roles.permissions'],
+      include: {
+        tenant: true,
+        userRoles: {
+          include: {
+            role: {
+              include: {
+                rolePermissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
   }
 
   async findByResetToken(token: string): Promise<User | null> {
-    return this.usersRepository.findOne({
+    return this.prisma.user.findFirst({
       where: { passwordResetToken: token },
-      relations: ['tenant', 'roles', 'roles.permissions'],
+      include: {
+        tenant: true,
+        userRoles: {
+          include: {
+            role: {
+              include: {
+                rolePermissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -152,7 +234,7 @@ export class UsersService {
     }
 
     // Verificar si ya existe la asignación
-    const existingAssignment = await this.userTenantRepository.findOne({
+    const existingAssignment = await this.prisma.userTenant.findFirst({
       where: { userId, tenantId },
     });
 
@@ -162,26 +244,26 @@ export class UsersService {
 
     // Si se marca como primario, desmarcar otros como primarios
     if (isPrimary) {
-      await this.userTenantRepository.update(
-        { userId, isPrimary: true },
-        { isPrimary: false },
-      );
+      await this.prisma.userTenant.updateMany({
+        where: { userId, isPrimary: true },
+        data: { isPrimary: false },
+      });
     }
 
     // Crear la asignación
-    const userTenant = this.userTenantRepository.create({
-      userId,
-      tenantId,
-      isPrimary: isPrimary ?? false,
+    return this.prisma.userTenant.create({
+      data: {
+        userId,
+        tenantId,
+        isPrimary: isPrimary ?? false,
+      },
     });
-
-    return this.userTenantRepository.save(userTenant);
   }
 
   async unassignTenant(unassignTenantDto: UnassignTenantDto): Promise<void> {
     const { userId, tenantId } = unassignTenantDto;
 
-    const assignment = await this.userTenantRepository.findOne({
+    const assignment = await this.prisma.userTenant.findFirst({
       where: { userId, tenantId },
     });
 
@@ -189,40 +271,57 @@ export class UsersService {
       throw new NotFoundException('Asignación no encontrada');
     }
 
-    await this.userTenantRepository.remove(assignment);
+    await this.prisma.userTenant.delete({
+      where: { id: assignment.id },
+    });
   }
 
   async getUserTenants(userId: string): Promise<UserTenant[]> {
-    return this.userTenantRepository.find({
+    return this.prisma.userTenant.findMany({
       where: { userId, isActive: true },
-      relations: ['tenant'],
-      order: { isPrimary: 'DESC', createdAt: 'ASC' },
+      include: { tenant: true },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  async getUserTenantsByEmail(email: string): Promise<UserTenant[]> {
+    // Find user by email
+    const user = await this.findByEmailAcrossTenants(email);
+    if (!user) {
+      return [];
+    }
+
+    // Get all tenants for this user
+    return this.prisma.userTenant.findMany({
+      where: { userId: user.id, isActive: true },
+      include: { tenant: true },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
     });
   }
 
   async setPrimaryTenant(userId: string, tenantId: string): Promise<void> {
     // Desmarcar todos como no primarios
-    await this.userTenantRepository.update(
-      { userId },
-      { isPrimary: false },
-    );
+    await this.prisma.userTenant.updateMany({
+      where: { userId },
+      data: { isPrimary: false },
+    });
 
     // Marcar el seleccionado como primario
-    const result = await this.userTenantRepository.update(
-      { userId, tenantId },
-      { isPrimary: true },
-    );
+    const result = await this.prisma.userTenant.updateMany({
+      where: { userId, tenantId },
+      data: { isPrimary: true },
+    });
 
-    if (result.affected === 0) {
+    if (result.count === 0) {
       throw new NotFoundException('Asignación no encontrada');
     }
   }
 
   async getTenantUsers(tenantId: string): Promise<UserTenant[]> {
-    return this.userTenantRepository.find({
+    return this.prisma.userTenant.findMany({
       where: { tenantId, isActive: true },
-      relations: ['user'],
-      order: { createdAt: 'DESC' },
+      include: { user: true },
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

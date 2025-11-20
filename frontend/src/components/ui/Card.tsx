@@ -41,7 +41,7 @@ const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
     return (
       <div
         ref={ref}
-        className={clsx('p-6', className)}
+        className={className || 'p-6'}
         {...props}
       />
     );

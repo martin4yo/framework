@@ -6,12 +6,7 @@ import {
   ExtractSubjectType,
   InferSubjects,
 } from '@casl/ability';
-import { User } from '../../users/entities/user.entity';
-import { Tenant } from '../../tenants/entities/tenant.entity';
-import { Role } from '../../roles/entities/role.entity';
-import { Permission } from '../entities/permission.entity';
-
-type Subjects = InferSubjects<typeof User | typeof Tenant | typeof Role | typeof Permission> | 'all' | string;
+type Subjects = 'User' | 'Tenant' | 'Role' | 'Permission' | 'all' | string;
 
 export type AppAbility = Ability<[string, Subjects]>;
 
@@ -42,7 +37,7 @@ export class CaslAbilityFactory {
     }
 
     return build({
-      detectSubjectType: (item) => item.constructor as ExtractSubjectType<Subjects>,
+      detectSubjectType: (item: any) => item.constructor?.name || item,
     });
   }
 }

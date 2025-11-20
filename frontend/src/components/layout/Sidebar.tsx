@@ -15,7 +15,8 @@ import {
   Globe,
   Building2,
   Lock,
-  Key
+  Key,
+  FileText
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +24,8 @@ import { Button } from '@/components/ui/Button';
 import { useSidebar } from '@/contexts/SidebarContext';
 import Image from 'next/image';
 import axiomaLogoInvertido from '@/assets/axioma_logo_invertido.png';
+import { TenantSwitcher } from '@/components/TenantSwitcher';
+import { useConfirmDialog } from '@/hooks/useConfirm';
 
 interface SidebarProps {
   children: React.ReactNode;
@@ -66,7 +69,7 @@ const menuSections: MenuSection[] = [
     name: 'Seguridad',
     icon: Lock,
     children: [
-      { name: 'Audit Logs', href: '/audit-logs', icon: Shield },
+      { name: 'Audit Logs', href: '/audit-logs', icon: FileText },
       { name: 'Sesiones', href: '/sessions', icon: User },
     ]
   },
@@ -84,6 +87,7 @@ export function Sidebar({ children }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { confirm } = useConfirmDialog();
 
   const handleSectionClick = useCallback((sectionName: string, sectionHref?: string) => {
     if (sectionHref && sectionHref !== '#') {
@@ -103,9 +107,17 @@ export function Sidebar({ children }: SidebarProps) {
     return pathname === href || pathname.startsWith(href + '/');
   }, [pathname]);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/auth/login');
+  const handleLogout = async () => {
+    const confirmed = await confirm(
+      '¿Estás seguro de que quieres cerrar sesión?',
+      'Confirmar cierre de sesión',
+      'warning'
+    );
+
+    if (confirmed) {
+      logout();
+      window.location.href = '/auth/login';
+    }
   };
 
   const SidebarContent = () => (
@@ -237,6 +249,13 @@ export function Sidebar({ children }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* Tenant Switcher */}
+      {!isCollapsed && (
+        <div className="px-4 py-3 border-t border-sidebar-hover">
+          <TenantSwitcher className="w-full" />
+        </div>
+      )}
 
       {/* User section */}
       <div className={clsx(

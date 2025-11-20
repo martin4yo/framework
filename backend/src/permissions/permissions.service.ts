@@ -1,19 +1,16 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Permission } from './entities/permission.entity';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreatePermissionDto } from './dto/create-permission.dto';
 import { UpdatePermissionDto } from './dto/update-permission.dto';
 
 @Injectable()
 export class PermissionsService {
   constructor(
-    @InjectRepository(Permission)
-    private permissionsRepository: Repository<Permission>,
+    private prisma: PrismaService,
   ) {}
 
-  async create(createPermissionDto: CreatePermissionDto): Promise<Permission> {
-    const existingPermission = await this.permissionsRepository.findOne({
+  async create(createPermissionDto: CreatePermissionDto): Promise<any> {
+    const existingPermission = await this.prisma.permission.findFirst({
       where: {
         tenantId: createPermissionDto.tenantId,
         resource: createPermissionDto.resource,
@@ -27,22 +24,23 @@ export class PermissionsService {
       );
     }
 
-    const permission = this.permissionsRepository.create(createPermissionDto);
-    return this.permissionsRepository.save(permission);
-  }
-
-  async findAll(tenantId?: string): Promise<Permission[]> {
-    const where = tenantId ? { tenantId } : {};
-    return this.permissionsRepository.find({
-      where,
-      order: { resource: 'ASC', action: 'ASC' },
+    return this.prisma.permission.create({
+      data: createPermissionDto,
     });
   }
 
-  async findOne(id: string): Promise<Permission> {
-    const permission = await this.permissionsRepository.findOne({
+  async findAll(tenantId?: string): Promise<any[]> {
+    const where = tenantId ? { tenantId } : {};
+    return this.prisma.permission.findMany({
+      where,
+      orderBy: [{ resource: 'asc' }, { action: 'asc' }],
+    });
+  }
+
+  async findOne(id: string): Promise<any> {
+    const permission = await this.prisma.permission.findUnique({
       where: { id },
-      relations: ['tenant'],
+      include: { tenant: true },
     });
 
     if (!permission) {
@@ -52,23 +50,28 @@ export class PermissionsService {
     return permission;
   }
 
-  async update(id: string, updatePermissionDto: UpdatePermissionDto): Promise<Permission> {
-    const permission = await this.findOne(id);
-    Object.assign(permission, updatePermissionDto);
-    return this.permissionsRepository.save(permission);
+  async update(id: string, updatePermissionDto: UpdatePermissionDto): Promise<any> {
+    await this.findOne(id);
+    return this.prisma.permission.update({
+      where: { id },
+      data: updatePermissionDto,
+    });
   }
 
   async remove(id: string): Promise<void> {
-    const permission = await this.findOne(id);
-    await this.permissionsRepository.softRemove(permission);
+    await this.findOne(id);
+    await this.prisma.permission.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 
   async findByResourceAndAction(
     resource: string,
     action: string,
     tenantId?: string,
-  ): Promise<Permission | null> {
-    return this.permissionsRepository.findOne({
+  ): Promise<any | null> {
+    return this.prisma.permission.findFirst({
       where: { resource, action, tenantId },
     });
   }

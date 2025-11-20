@@ -211,7 +211,7 @@ export default function TenantsPage() {
         <CardHeader>
           <CardTitle>Tenants ({filteredTenants.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -223,42 +223,41 @@ export default function TenantsPage() {
               <p className="text-gray-600">No se encontraron tenants</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+            <table className="w-full">
+                <thead className="bg-gray-50 border-b border-border">
+                  <tr>
+                    <th className="text-left py-3 pl-6 text-xs font-medium text-text-secondary uppercase tracking-wider">
                       Nombre
                     </th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">
                       Slug
                     </th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">
                       Estado
                     </th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-text-secondary uppercase tracking-wider">
                       Creado
                     </th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-700">
+                    <th className="text-right py-3 pr-6 text-xs font-medium text-text-secondary uppercase tracking-wider">
                       Acciones
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-white divide-y divide-border">
                   {filteredTenants.map((tenant) => (
                     <tr
                       key={tenant.id}
-                      className="border-b border-gray-100 hover:bg-gray-50"
+                      className="hover:bg-gray-50"
                     >
-                      <td className="py-3 px-4">
+                      <td className="py-4 pl-6">
                         <div className="font-medium text-gray-900">{tenant.name}</div>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-4 px-4">
                         <code className="text-sm bg-gray-100 px-2 py-1 rounded">
                           {tenant.slug}
                         </code>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-4 px-4">
                         {tenant.isActive ? (
                           <span className="inline-flex items-center gap-1 text-green-700 bg-green-100 px-2 py-1 rounded-full text-sm">
                             <CheckCircle className="w-4 h-4" />
@@ -271,10 +270,10 @@ export default function TenantsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
+                      <td className="py-4 px-4 text-gray-600">
                         {new Date(tenant.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-4 pr-6">
                         <div className="flex justify-end gap-2">
                           <Button
                             variant="ghost"
@@ -297,7 +296,6 @@ export default function TenantsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
           )}
         </CardContent>
       </Card>

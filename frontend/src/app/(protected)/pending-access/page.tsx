@@ -26,12 +26,8 @@ export default function PendingAccessPage() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 py-8"
-      style={{
-        background: `linear-gradient(135deg, #667eea 0%, #764ba2 100%)`,
-      }}
-    >
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-gradient-to-br from-palette-purple to-palette-dark">
+
       <Card className="w-full max-w-4xl mx-auto">
         <CardContent className="p-0">
           <div className="flex">
