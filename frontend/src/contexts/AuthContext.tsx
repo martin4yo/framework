@@ -19,11 +19,17 @@ export interface Tenant {
   configuracion?: any;
 }
 
+interface LoginResponse {
+  user: User;
+  tenant: Tenant | null;
+  token: string;
+}
+
 interface AuthContextType {
   user: User | null;
   tenant: Tenant | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, tenantId?: string) => Promise<LoginResponse>;
   logout: () => void;
   switchTenant: (tenantId: string) => Promise<void>;
   isLoading: boolean;
