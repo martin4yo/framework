@@ -5,7 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Building2, Plus, Search, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Building2, Plus, Search, Edit, Trash2, CheckCircle, XCircle, Package } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import ConfirmModal from '@/components/modals/ConfirmModal';
@@ -22,6 +23,7 @@ interface Tenant {
 
 export default function TenantsPage() {
   const { token } = useAuth();
+  const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -275,6 +277,14 @@ export default function TenantsPage() {
                       </td>
                       <td className="py-4 pr-6">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/tenants/${tenant.id}/applications`)}
+                            title="Gestionar aplicaciones"
+                          >
+                            <Package className="w-4 h-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

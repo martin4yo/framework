@@ -16,7 +16,8 @@ import {
   Building2,
   Lock,
   Key,
-  FileText
+  FileText,
+  Package
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '@/contexts/AuthContext';
@@ -64,6 +65,11 @@ const menuSections: MenuSection[] = [
     name: 'Tenants',
     icon: Building2,
     href: '/tenants'
+  },
+  {
+    name: 'Aplicaciones',
+    icon: Package,
+    href: '/applications'
   },
   {
     name: 'Seguridad',

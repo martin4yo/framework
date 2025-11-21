@@ -190,6 +190,7 @@ model Application {
   description String?
   url         String    @db.VarChar(500) // URL base de la app (dev/prod)
   icon        String?   @db.VarChar(500) // URL del icono
+  lucideIcon  String?   @map("lucide_icon") @db.VarChar(50) // Nombre del icono de Lucide React
   color       String?   @db.VarChar(20) // Color tema de la app
   order       Int       @default(0) // Orden en el sidebar
   isActive    Boolean   @default(true) @map("is_active")

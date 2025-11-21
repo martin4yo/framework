@@ -73,8 +73,15 @@ export default function RolesPage() {
         headers: { Authorization: `Bearer ${token}` },
         params: tenant?.id ? { tenantId: tenant.id } : {},
       });
-      setRoles(response.data);
-      setFilteredRoles(response.data);
+
+      // Mapear rolePermissions a permissions
+      const rolesWithPermissions = response.data.map((role: any) => ({
+        ...role,
+        permissions: role.rolePermissions?.map((rp: any) => rp.permission) || [],
+      }));
+
+      setRoles(rolesWithPermissions);
+      setFilteredRoles(rolesWithPermissions);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Error al cargar roles');
     } finally {
