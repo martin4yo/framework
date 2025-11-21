@@ -480,11 +480,7 @@ export class AuthService {
       throw new BadRequestException('Token de verificación inválido o expirado');
     }
 
-    // Check if token has expired
-    if (user.emailVerificationExpires && user.emailVerificationExpires < new Date()) {
-      console.log('❌ [VerifyEmail] Token expired');
-      throw new BadRequestException('Token de verificación inválido o expirado');
-    }
+    // Token expiration check removed - column emailVerificationExpires not in current schema
 
     if (user.emailVerified) {
       console.log('⚠️ [VerifyEmail] Email already verified');

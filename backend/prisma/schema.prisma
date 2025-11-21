@@ -8,48 +8,50 @@ datasource db {
 }
 
 model Tenant {
-  id          String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  name        String        @db.VarChar(255)
-  slug        String        @unique @db.VarChar(100)
-  settings    Json          @default("{}")
-  isActive    Boolean       @default(true) @map("is_active")
-  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt   DateTime      @default(now()) @map("updated_at") @db.Timestamp(6)
-  deletedAt   DateTime?     @map("deleted_at") @db.Timestamp(6)
+  id        String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name      String    @db.VarChar(255)
+  slug      String    @unique @db.VarChar(100)
+  settings  Json      @default("{}")
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
-  auditLogs   AuditLog[]
-  permissions Permission[]
-  roles       Role[]
-  userTenants UserTenant[]
   users       User[]
+  userTenants UserTenant[]
+  roles       Role[]
+  permissions Permission[]
+  auditLogs   AuditLog[]
 
+  @@index([slug], map: "idx_tenants_slug")
   @@map("tenants")
 }
 
 model User {
-  id                       String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  tenantId                 String?        @map("tenant_id") @db.Uuid
-  email                    String         @db.VarChar(255)
-  passwordHash             String?        @map("password_hash") @db.VarChar(255)
-  firstName                String?        @map("first_name") @db.VarChar(100)
-  lastName                 String?        @map("last_name") @db.VarChar(100)
-  isActive                 Boolean        @default(true) @map("is_active")
-  emailVerified            Boolean        @default(false) @map("email_verified")
-  emailVerificationToken   String?        @map("email_verification_token") @db.VarChar
-  emailVerificationExpires DateTime?      @map("email_verification_expires") @db.Timestamp(6)
-  passwordResetToken       String?        @map("password_reset_token") @db.VarChar
-  passwordResetExpires     DateTime?      @map("password_reset_expires") @db.Timestamp(6)
-  lastLoginAt              DateTime?      @map("last_login_at") @db.Timestamp(6)
-  createdAt                DateTime       @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt                DateTime       @default(now()) @map("updated_at") @db.Timestamp(6)
-  deletedAt                DateTime?      @map("deleted_at") @db.Timestamp(6)
+  id                     String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId               String?   @map("tenant_id") @db.Uuid
+  email                  String    @db.VarChar(255)
+  passwordHash           String?   @map("password_hash") @db.VarChar(255)
+  firstName              String?   @map("first_name") @db.VarChar(100)
+  lastName               String?   @map("last_name") @db.VarChar(100)
+  isActive               Boolean   @default(true) @map("is_active")
+  emailVerified          Boolean   @default(false) @map("email_verified")
+  emailVerificationToken String?   @map("email_verification_token") @db.VarChar(255)
+  passwordResetToken     String?   @map("password_reset_token") @db.VarChar(255)
+  passwordResetExpires   DateTime? @map("password_reset_expires")
+  lastLoginAt            DateTime? @map("last_login_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @default(now()) @map("updated_at")
+  deletedAt              DateTime? @map("deleted_at")
 
-  auditLogs     AuditLog[]
-  refreshTokens RefreshToken[]
-  userRoles     UserRole[]
-  userTenants   UserTenant[]
   tenant        Tenant?        @relation(fields: [tenantId], references: [id])
+  userTenants   UserTenant[]
+  userRoles     UserRole[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
 
+  @@index([email], map: "idx_users_email")
+  @@index([tenantId], map: "idx_users_tenant")
   @@map("users")
 }
 
@@ -59,14 +61,17 @@ model Role {
   name        String    @db.VarChar(100)
   description String?
   isSystem    Boolean   @default(false) @map("is_system")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamp(6)
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
-  rolePermissions RolePermission[]
   tenant          Tenant?          @relation(fields: [tenantId], references: [id])
+  rolePermissions RolePermission[]
   userRoles       UserRole[]
 
+  @@unique([tenantId, name], map: "unique_tenant_role_name")
+  @@index([isSystem], map: "idx_roles_system")
+  @@index([tenantId], map: "idx_roles_tenant")
   @@map("roles")
 }
 
@@ -77,13 +82,16 @@ model Permission {
   action      String    @db.VarChar(50)
   conditions  Json      @default("{}")
   description String?
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamp(6)
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
   tenant          Tenant?          @relation(fields: [tenantId], references: [id])
   rolePermissions RolePermission[]
 
+  @@unique([tenantId, resource, action], map: "unique_tenant_permission")
+  @@index([resource], map: "idx_permissions_resource")
+  @@index([tenantId], map: "idx_permissions_tenant")
   @@map("permissions")
 }
 
@@ -91,19 +99,71 @@ model RefreshToken {
   id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   userId          String    @map("user_id") @db.Uuid
   token           String    @unique @db.VarChar(500)
-  expiresAt       DateTime  @map("expires_at") @db.Timestamp(6)
+  expiresAt       DateTime  @map("expires_at")
   revoked         Boolean   @default(false)
-  revokedAt       DateTime? @map("revoked_at") @db.Timestamp(6)
-  replacedByToken String?   @map("replaced_by_token") @db.VarChar
+  revokedAt       DateTime? @map("revoked_at")
+  replacedByToken String?   @map("replaced_by_token") @db.VarChar(500)
   userAgent       String?   @map("user_agent")
   ipAddress       String?   @map("ip_address") @db.VarChar(45)
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id])
 
+  @@index([token], map: "idx_refresh_tokens_token")
+  @@index([userId], map: "idx_refresh_tokens_user")
   @@map("refresh_tokens")
 }
 
+model AuditLog {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String?  @map("tenant_id") @db.Uuid
+  userId        String?  @map("user_id") @db.Uuid
+  action        String   @db.VarChar(100)
+  resource_type String?  @db.VarChar(100)
+  resource_id   String?  @db.Uuid
+  metadata      Json     @default("{}")
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([action], map: "idx_audit_logs_action")
+  @@index([createdAt], map: "idx_audit_logs_created")
+  @@index([tenantId], map: "idx_audit_logs_tenant")
+  @@index([userId], map: "idx_audit_logs_user")
+  @@map("audit_logs")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  created_at   DateTime   @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@index([permissionId], map: "idx_role_permissions_permission")
+  @@index([roleId], map: "idx_role_permissions_role")
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId      String   @map("user_id") @db.Uuid
+  roleId      String   @map("role_id") @db.Uuid
+  assigned_at DateTime @default(now())
+  assigned_by String?  @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+  @@index([roleId], map: "idx_user_roles_role")
+  @@index([userId], map: "idx_user_roles_user")
+  @@map("user_roles")
+}
 model UserTenant {
   id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
@@ -117,49 +177,4 @@ model UserTenant {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("user_tenants")
-}
-
-model AuditLog {
-  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  tenantId    String?   @map("tenant_id") @db.Uuid
-  userId      String?   @map("user_id") @db.Uuid
-  action      String    @db.VarChar(100)
-  entity      String    @db.VarChar(100)
-  entityId    String?   @map("entity_id") @db.VarChar
-  oldValue    Json?
-  newValue    Json?
-  ipAddress   String?   @map("ip_address") @db.VarChar(45)
-  userAgent   String?   @map("user_agent")
-  description String?
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-
-  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user   User?   @relation(fields: [userId], references: [id])
-
-  @@map("audit_logs")
-}
-
-// Join tables for many-to-many relationships
-model RolePermission {
-  roleId       String     @map("role_id") @db.Uuid
-  permissionId String     @map("permission_id") @db.Uuid
-  permission   Permission @relation(fields: [permissionId], references: [id])
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@id([roleId, permissionId])
-  @@index([permissionId])
-  @@index([roleId])
-  @@map("role_permissions")
-}
-
-model UserRole {
-  userId String @map("user_id") @db.Uuid
-  roleId String @map("role_id") @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role   @relation(fields: [roleId], references: [id])
-
-  @@id([userId, roleId])
-  @@index([userId])
-  @@index([roleId])
-  @@map("user_roles")
 }
