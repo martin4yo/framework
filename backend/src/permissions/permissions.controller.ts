@@ -25,8 +25,11 @@ export class PermissionsController {
   }
 
   @Get()
-  findAll(@Query('tenantId') tenantId?: string) {
-    return this.permissionsService.findAll(tenantId);
+  findAll(
+    @Query('tenantId') tenantId?: string,
+    @Query('applicationId') applicationId?: string,
+  ) {
+    return this.permissionsService.findAll(tenantId, applicationId);
   }
 
   @Get(':id')

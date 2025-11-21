@@ -17,11 +17,12 @@ model Tenant {
   updatedAt DateTime  @default(now()) @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  users       User[]
-  userTenants UserTenant[]
-  roles       Role[]
-  permissions Permission[]
-  auditLogs   AuditLog[]
+  users              User[]
+  userTenants        UserTenant[]
+  roles              Role[]
+  permissions        Permission[]
+  auditLogs          AuditLog[]
+  tenantApplications TenantApplication[]
 
   @@index([slug], map: "idx_tenants_slug")
   @@map("tenants")
@@ -76,22 +77,25 @@ model Role {
 }
 
 model Permission {
-  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  tenantId    String?   @map("tenant_id") @db.Uuid
-  resource    String    @db.VarChar(100)
-  action      String    @db.VarChar(50)
-  conditions  Json      @default("{}")
-  description String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @default(now()) @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  id            String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String?      @map("tenant_id") @db.Uuid
+  applicationId String?      @map("application_id") @db.Uuid
+  resource      String       @db.VarChar(100)
+  action        String       @db.VarChar(50)
+  conditions    Json         @default("{}")
+  description   String?
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @default(now()) @map("updated_at")
+  deletedAt     DateTime?    @map("deleted_at")
 
   tenant          Tenant?          @relation(fields: [tenantId], references: [id])
+  application     Application?     @relation(fields: [applicationId], references: [id])
   rolePermissions RolePermission[]
 
   @@unique([tenantId, resource, action], map: "unique_tenant_permission")
   @@index([resource], map: "idx_permissions_resource")
   @@index([tenantId], map: "idx_permissions_tenant")
+  @@index([applicationId], map: "idx_permissions_application")
   @@map("permissions")
 }
 
@@ -177,4 +181,45 @@ model UserTenant {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("user_tenants")
+}
+
+model Application {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name        String    @db.VarChar(100)
+  slug        String    @unique @db.VarChar(50)
+  description String?
+  url         String    @db.VarChar(500) // URL base de la app (dev/prod)
+  icon        String?   @db.VarChar(500) // URL del icono
+  color       String?   @db.VarChar(20) // Color tema de la app
+  order       Int       @default(0) // Orden en el sidebar
+  isActive    Boolean   @default(true) @map("is_active")
+  isMicrofrontend Boolean @default(true) @map("is_microfrontend") // true para Module Federation
+  remoteEntry String?   @map("remote_entry") @db.VarChar(500) // URL del remoteEntry.js
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamp(6)
+
+  tenantApplications TenantApplication[]
+  permissions        Permission[]
+
+  @@index([slug], map: "idx_applications_slug")
+  @@index([order], map: "idx_applications_order")
+  @@map("applications")
+}
+
+model TenantApplication {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  isEnabled     Boolean  @default(true) @map("is_enabled")
+  settings      Json     @default("{}") // Config específica del tenant para esta app
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamp(6)
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, applicationId], map: "unique_tenant_application")
+  @@index([tenantId], map: "idx_tenant_applications_tenant")
+  @@index([applicationId], map: "idx_tenant_applications_app")
+  @@map("tenant_applications")
 }

@@ -15,6 +15,8 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AssignTenantDto } from './dto/assign-tenant.dto';
 import { UnassignTenantDto } from './dto/unassign-tenant.dto';
+import { AssignRoleDto } from './dto/assign-role.dto';
+import { UnassignRoleDto } from './dto/unassign-role.dto';
 
 @Controller('users')
 export class UsersController {
@@ -78,5 +80,23 @@ export class UsersController {
     @Param('tenantId') tenantId: string,
   ) {
     return this.usersService.setPrimaryTenant(userId, tenantId);
+  }
+
+  // Role assignment endpoints
+  @Post('assign-role')
+  @HttpCode(HttpStatus.CREATED)
+  assignRole(@Body() assignRoleDto: AssignRoleDto) {
+    return this.usersService.assignRole(assignRoleDto);
+  }
+
+  @Post('unassign-role')
+  @HttpCode(HttpStatus.OK)
+  unassignRole(@Body() unassignRoleDto: UnassignRoleDto) {
+    return this.usersService.unassignRole(unassignRoleDto);
+  }
+
+  @Get(':id/roles')
+  getUserRoles(@Param('id') userId: string) {
+    return this.usersService.getUserRoles(userId);
   }
 }

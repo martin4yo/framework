@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { AssignPermissionDto } from './dto/assign-permission.dto';
+import { UnassignPermissionDto } from './dto/unassign-permission.dto';
 
 @Injectable()
 export class RolesService {
@@ -79,6 +81,82 @@ export class RolesService {
     await this.prisma.role.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+  }
+
+  // Permission assignment methods
+  async assignPermission(assignPermissionDto: AssignPermissionDto): Promise<any> {
+    const { roleId, permissionId } = assignPermissionDto;
+
+    // Verificar que el rol existe
+    const role = await this.findOne(roleId);
+    if (!role) {
+      throw new NotFoundException(`Rol con ID "${roleId}" no encontrado`);
+    }
+
+    // Verificar que el permiso existe
+    const permission = await this.prisma.permission.findUnique({
+      where: { id: permissionId },
+    });
+    if (!permission) {
+      throw new NotFoundException(`Permiso con ID "${permissionId}" no encontrado`);
+    }
+
+    // Verificar si ya existe la asignación
+    const existingAssignment = await this.prisma.rolePermission.findUnique({
+      where: {
+        roleId_permissionId: { roleId, permissionId },
+      },
+    });
+
+    if (existingAssignment) {
+      throw new ConflictException('El rol ya tiene este permiso asignado');
+    }
+
+    // Crear la asignación
+    return this.prisma.rolePermission.create({
+      data: {
+        roleId,
+        permissionId,
+      },
+      include: {
+        permission: true,
+      },
+    });
+  }
+
+  async unassignPermission(unassignPermissionDto: UnassignPermissionDto): Promise<void> {
+    const { roleId, permissionId } = unassignPermissionDto;
+
+    const assignment = await this.prisma.rolePermission.findUnique({
+      where: {
+        roleId_permissionId: { roleId, permissionId },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Asignación de permiso no encontrada');
+    }
+
+    await this.prisma.rolePermission.delete({
+      where: {
+        roleId_permissionId: { roleId, permissionId },
+      },
+    });
+  }
+
+  async getRolePermissions(roleId: string): Promise<any[]> {
+    await this.findOne(roleId); // Verificar que el rol existe
+
+    return this.prisma.rolePermission.findMany({
+      where: { roleId },
+      include: {
+        permission: {
+          include: {
+            application: true, // Incluir la aplicación del permiso
+          },
+        },
+      },
     });
   }
 }

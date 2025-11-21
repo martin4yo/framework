@@ -266,11 +266,53 @@ async function main() {
   });
   console.log('✅ Rol SuperAdmin asignado al usuario admin');
 
+  // 8. Crear aplicaciones del ecosistema
+  console.log('📱 Registrando aplicaciones...');
+
+  const prohubApp = await prisma.application.upsert({
+    where: { slug: 'prohub' },
+    update: {},
+    create: {
+      name: 'ProHub',
+      slug: 'prohub',
+      description: 'Portal de Proveedores AXIOMA',
+      url: 'http://localhost:3001', // URL en desarrollo
+      icon: '/apps/prohub-icon.svg',
+      color: '#3B82F6', // blue-500
+      order: 1,
+      isActive: true,
+      isMicrofrontend: true,
+      remoteEntry: 'http://localhost:3001/remoteEntry.js',
+    },
+  });
+  console.log(`✅ Aplicación registrada: ${prohubApp.name}`);
+
+  // 9. Habilitar ProHub para el tenant Axioma
+  console.log('🔗 Habilitando aplicaciones para el tenant...');
+  await prisma.tenantApplication.upsert({
+    where: {
+      tenantId_applicationId: {
+        tenantId: tenant.id,
+        applicationId: prohubApp.id,
+      },
+    },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      applicationId: prohubApp.id,
+      isEnabled: true,
+      settings: {},
+    },
+  });
+  console.log('✅ ProHub habilitado para tenant Axioma');
+
   console.log('\n🎉 Seed completado exitosamente!\n');
   console.log('📋 Credenciales del SuperAdmin:');
   console.log('   Email:    admin@axioma.com');
   console.log('   Password: admin123');
   console.log('   Tenant:   axioma\n');
+  console.log('📱 Aplicaciones registradas:');
+  console.log(`   - ${prohubApp.name} (${prohubApp.slug})\n`);
 }
 
 main()

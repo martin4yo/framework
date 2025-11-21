@@ -10,6 +10,8 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AssignTenantDto } from './dto/assign-tenant.dto';
 import { UnassignTenantDto } from './dto/unassign-tenant.dto';
+import { AssignRoleDto } from './dto/assign-role.dto';
+import { UnassignRoleDto } from './dto/unassign-role.dto';
 import { User, UserTenant } from '@prisma/client';
 
 @Injectable()
@@ -322,6 +324,83 @@ export class UsersService {
       where: { tenantId, isActive: true },
       include: { user: true },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // Role assignment methods
+  async assignRole(assignRoleDto: AssignRoleDto): Promise<any> {
+    const { userId, roleId, assignedBy } = assignRoleDto;
+
+    // Verificar que el usuario existe
+    const user = await this.findOne(userId);
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID "${userId}" no encontrado`);
+    }
+
+    // Verificar que el rol existe
+    const role = await this.prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) {
+      throw new NotFoundException(`Rol con ID "${roleId}" no encontrado`);
+    }
+
+    // Verificar si ya existe la asignación
+    const existingAssignment = await this.prisma.userRole.findUnique({
+      where: {
+        userId_roleId: { userId, roleId },
+      },
+    });
+
+    if (existingAssignment) {
+      throw new ConflictException('El usuario ya tiene este rol asignado');
+    }
+
+    // Crear la asignación
+    return this.prisma.userRole.create({
+      data: {
+        userId,
+        roleId,
+        assigned_by: assignedBy,
+      },
+      include: {
+        role: true,
+      },
+    });
+  }
+
+  async unassignRole(unassignRoleDto: UnassignRoleDto): Promise<void> {
+    const { userId, roleId } = unassignRoleDto;
+
+    const assignment = await this.prisma.userRole.findUnique({
+      where: {
+        userId_roleId: { userId, roleId },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Asignación de rol no encontrada');
+    }
+
+    await this.prisma.userRole.delete({
+      where: {
+        userId_roleId: { userId, roleId },
+      },
+    });
+  }
+
+  async getUserRoles(userId: string): Promise<any[]> {
+    return this.prisma.userRole.findMany({
+      where: { userId },
+      include: {
+        role: {
+          include: {
+            rolePermissions: {
+              include: {
+                permission: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 }

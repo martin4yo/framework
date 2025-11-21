@@ -29,10 +29,16 @@ export class PermissionsService {
     });
   }
 
-  async findAll(tenantId?: string): Promise<any[]> {
-    const where = tenantId ? { tenantId } : {};
+  async findAll(tenantId?: string, applicationId?: string): Promise<any[]> {
+    const where: any = {};
+    if (tenantId) where.tenantId = tenantId;
+    if (applicationId) where.applicationId = applicationId;
+
     return this.prisma.permission.findMany({
       where,
+      include: {
+        application: true, // Incluir info de la aplicación
+      },
       orderBy: [{ resource: 'asc' }, { action: 'asc' }],
     });
   }

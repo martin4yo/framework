@@ -12,6 +12,10 @@ export class CreatePermissionDto {
   @IsUUID()
   tenantId?: string;
 
+  @IsOptional()
+  @IsUUID()
+  applicationId?: string;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
