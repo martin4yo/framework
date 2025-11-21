@@ -162,9 +162,9 @@ export default function LoginPage() {
 
       setTimeout(() => {
         if (result?.tenant) {
-          router.push('/dashboard');
+          router.replace('/dashboard');
         } else {
-          router.push('/pending-access');
+          router.replace('/pending-access');
         }
       }, 2000);
     } catch (error: any) {

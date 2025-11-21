@@ -67,6 +67,26 @@ export default function ResetPasswordPage() {
 }
 ```
 
+### 5. `frontend/src/components/ui/LoadingScreen.tsx` (NUEVO)
+```typescript
+// Componente de splash screen reutilizable
+export function LoadingScreen({ message = 'Cargando...' }: LoadingScreenProps) {
+  // Muestra logo de Axioma con animación y fondo degradado
+}
+```
+
+### 6. `frontend/src/contexts/AuthContext.tsx`
+```typescript
+// Agregado LoadingScreen mientras verifica autenticación
+if (isLoading) {
+  return (
+    <AuthContext.Provider value={{...}}>
+      <LoadingScreen />
+    </AuthContext.Provider>
+  );
+}
+```
+
 ---
 
 ## 🚀 Sistema Listo para Usar
@@ -161,4 +181,18 @@ El sistema está completamente migrado de TypeORM a Prisma 5 y funcionando corre
 
 ---
 
-**Última actualización:** 20 de noviembre de 2025, 11:15
+## 🎨 Mejora de UX
+
+### Loading Screen Mejorado
+Ahora la pantalla de carga inicial muestra el mismo splash animado del login:
+- ✅ Logo de Axioma con animación pulse
+- ✅ Fondo degradado corporativo
+- ✅ Mensaje de "Cargando..."
+- ✅ Experiencia consistente en toda la aplicación
+
+**Archivos creados:**
+- `frontend/src/components/ui/LoadingScreen.tsx` - Componente reutilizable de splash screen
+
+---
+
+**Última actualización:** 20 de noviembre de 2025, 11:25

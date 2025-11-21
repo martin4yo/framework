@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 
 export interface User {
   id: string;
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const isAuthenticated = !!user && !!token;
   const isSuperuser = !!user?.superuser;
@@ -58,9 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifyToken(savedToken);
       } else {
         setIsLoading(false);
+        setIsInitializing(false);
       }
     } else {
       setIsLoading(false);
+      setIsInitializing(false);
     }
   }, []);
 
@@ -88,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
     } finally {
       setIsLoading(false);
+      setIsInitializing(false);
     }
   };
 
@@ -180,6 +185,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('token');
     }
   };
+
+  // Show loading screen only during initial authentication check
+  if (isInitializing) {
+    return (
+      <AuthContext.Provider
+        value={{
+          user,
+          tenant,
+          token,
+          login,
+          logout,
+          switchTenant,
+          isLoading,
+          isAuthenticated,
+          isSuperuser,
+        }}
+      >
+        <LoadingScreen />
+      </AuthContext.Provider>
+    );
+  }
 
   return (
     <AuthContext.Provider
